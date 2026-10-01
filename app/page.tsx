@@ -602,7 +602,7 @@ export default function Home() {
             }
           >
             Quantidades
-            líderes
+            l
           </button>
 
           <button
