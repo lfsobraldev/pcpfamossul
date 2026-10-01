@@ -1,34 +1,74 @@
-export type StatusApontamento = "PENDENTE" | "APONTADA" | "AGUARDANDO LINHA" | "DIVERGÊNCIA";
+export type StatusProgramacao =
+  | "PENDENTE"
+  | "PROGRAMADO"
+  | "APONTADA"
+  | "AGUARDANDO LINHA"
+  | "DIVERGÊNCIA";
+
+export type PrioridadeProgramacao =
+  | "NORMAL"
+  | "ALTA"
+  | "URGENTE";
+
+export type TipoPeca =
+  | "BATENTE"
+  | "TRAVESSA BATENTE"
+  | "PORTA"
+  | "ALIZAR"
+  | "PERNA ALIZAR"
+  | "KIT CORRER"
+  | "BAGUETE"
+  | "OUTROS";
 
 export type LinhaProgramacao = {
   id: string;
+
   fonte: string;
+
   pedido: string;
-  item: string;
   of: string;
+
+  peca: TipoPeca;
+
   descricao: string;
-  tipoPeca: string;
+
   material: string;
-  acabamento: string;
-  cor: string;
+
   medida: string;
+
   rebaixo: string;
-  lado: string;
-  processo: string;
-  maquina: string;
+
+  acabamento: string;
+
+  cor: string;
+
   quantidade: number;
-  status: StatusApontamento;
+
+  prioridade: PrioridadeProgramacao;
+
+  status: StatusProgramacao;
+
+  maquina: string;
+
   observacao: string;
 };
 
 export type ResumoQuantidade = {
   chave: string;
+
   maquina: string;
-  tipoPeca: string;
+
+  peca: TipoPeca;
+
   material: string;
-  acabamento: string;
-  cor: string;
+
   medida: string;
+
   rebaixo: string;
+
+  acabamento: string;
+
+  cor: string;
+
   quantidade: number;
 };
