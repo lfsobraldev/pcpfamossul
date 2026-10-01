@@ -1,8 +1,5 @@
 import * as XLSX from "xlsx";
 import * as pdfjsLib from "pdfjs-dist";
-import pdfWorker from "pdfjs-dist/build/pdf.worker.min.mjs";
-pdfjsLib.GlobalWorkerOptions.workerSrc =
-  pdfWorker;
 
 import { LinhaProgramacao } from "@/types/programacao";
 
@@ -10,6 +7,17 @@ import {
   enriquecerLinha,
 } from "@/lib/programacao";
 
+if (typeof window !== "undefined") {
+  pdfjsLib.GlobalWorkerOptions.workerSrc =
+    "/pdf.worker.min.mjs";
+}
+
+const normalize = (texto: string) =>
+  texto
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toUpperCase()
+    .replace(/[^A-Z0-9]/g, "");
 const normalize = (texto: string) =>
   texto
     .normalize("NFD")
