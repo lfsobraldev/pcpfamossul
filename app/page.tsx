@@ -402,7 +402,7 @@ export default function Home() {
 
             <input
               type="file"
-              accept=".xlsx,.xls,.csv"
+              accept=".pdf,.xlsx,.xls,.csv"
               onChange={(
                 e
               ) =>
@@ -432,7 +432,7 @@ export default function Home() {
 
             <input
               type="file"
-              accept=".xlsx,.xls,.csv"
+              accept=".pdf,.xlsx,.xls,.csv"
               onChange={(
                 e
               ) =>
