@@ -677,33 +677,31 @@ export async function exportarExcel(
       },
     ];
 
-    ws.pageSetup =
-      {
-        orientation:
-          "landscape",
+    ws.pageSetup = {
+      orientation:
+        "landscape",
 
-        fitToPage:
-          true,
+      fitToPage:
+        true,
 
-        fitToWidth:
-          1,
+      fitToWidth:
+        1,
 
-        fitToHeight:
-          0,
+      fitToHeight:
+        0,
 
-        paperSize:
-          9,
-      };
+      paperSize:
+        9,
 
-    ws.pageMargins =
-      {
+      margins: {
         left: 0.2,
         right: 0.2,
         top: 0.4,
         bottom: 0.4,
         header: 0.2,
         footer: 0.2,
-      };
+      },
+    };
 
     aplicarBordas(
       ws,
@@ -764,3 +762,11 @@ export async function exportarExcel(
     url
   );
 }
+
+
+Agora substitua somente o exporter.ts por esse e rode novamente:
+
+npm run build
+
+
+Se aparecer outro erro, mande o erro inteiro. Aí seguimos um por um, sem mexer desnecessariamente nos arquivos que já estão corretos.
