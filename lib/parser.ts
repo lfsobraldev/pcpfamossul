@@ -11,6 +11,10 @@ import {
 |--------------------------------------------------------------------------
 | PDF.JS
 |--------------------------------------------------------------------------
+|
+| O worker é carregado diretamente pelo navegador.
+| Não é necessário criar pdf.worker.min.mjs no projeto.
+|
 */
 
 if (typeof window !== "undefined") {
@@ -82,9 +86,12 @@ const aliases = {
 function buscarValor(
   row: Record<string, unknown>,
   campo: keyof typeof aliases
-) {
-  for (const [coluna, valor] of Object.entries(row)) {
-    const normalizada = normalize(coluna);
+): unknown {
+  for (
+    const [coluna, valor] of Object.entries(row)
+  ) {
+    const normalizada =
+      normalize(coluna);
 
     if (
       aliases[campo].includes(
@@ -100,6 +107,78 @@ function buscarValor(
 
 /*
 |--------------------------------------------------------------------------
+| CONVERTE QUANTIDADE
+|--------------------------------------------------------------------------
+*/
+
+function converterQuantidade(
+  valor: unknown
+): number {
+  if (
+    valor === null ||
+    valor === undefined ||
+    valor === ""
+  ) {
+    return 0;
+  }
+
+  if (
+    typeof valor === "number"
+  ) {
+    return Number.isFinite(
+      valor
+    )
+      ? valor
+      : 0;
+  }
+
+  const texto =
+    String(valor)
+      .trim()
+      .replace(/\s/g, "");
+
+  if (!texto) {
+    return 0;
+  }
+
+  /*
+    Trata formatos como:
+
+    10
+    10,5
+    10.5
+    1.000
+    1.000,50
+  */
+
+  if (
+    texto.includes(",") &&
+    texto.includes(".")
+  ) {
+    return (
+      Number(
+        texto
+          .replace(/\./g, "")
+          .replace(",", ".")
+      ) || 0
+    );
+  }
+
+  if (
+    texto.includes(",")
+  ) {
+    return (
+      Number(
+        texto.replace(",", ".")
+      ) || 0
+    );
+  }
+
+  return Number(texto) || 0;
+}
+
+/*
+|--------------------------------------------------------------------------
 | CONVERTE LINHA DA PLANILHA
 |--------------------------------------------------------------------------
 */
@@ -108,52 +187,44 @@ function converterLinha(
   row: Record<string, unknown>,
   fonte: string
 ): LinhaProgramacao {
-  const descricao = String(
-    buscarValor(
-      row,
-      "descricao"
-    ) ?? ""
-  ).trim();
-
-  const quantidadeBruta =
-    buscarValor(
-      row,
-      "quantidade"
-    );
-
-  const quantidade = Number(
+  const descricao =
     String(
-      quantidadeBruta ?? "0"
-    )
-      .replace(/\./g, "")
-      .replace(",", ".")
-  );
+      buscarValor(
+        row,
+        "descricao"
+      ) ?? ""
+    ).trim();
 
-  return enriquecerLinha({
-    fonte,
-
-    pedido: String(
+  const pedido =
+    String(
       buscarValor(
         row,
         "pedido"
       ) ?? ""
-    ).trim(),
+    ).trim();
 
-    of: String(
+  const of =
+    String(
       buscarValor(
         row,
         "of"
       ) ?? ""
-    ).trim(),
+    ).trim();
 
-    descricao,
-
-    quantidade:
-      Number.isFinite(
-        quantidade
+  const quantidade =
+    converterQuantidade(
+      buscarValor(
+        row,
+        "quantidade"
       )
-        ? quantidade
-        : 0,
+    );
+
+  return enriquecerLinha({
+    fonte,
+    pedido,
+    of,
+    descricao,
+    quantidade,
   });
 }
 
@@ -188,6 +259,10 @@ export async function lerPlanilha(
       workbook.Sheets[
         nomeAba
       ];
+
+    if (!ws) {
+      continue;
+    }
 
     const rows =
       XLSX.utils.sheet_to_json<
@@ -224,6 +299,173 @@ export async function lerPlanilha(
 
 /*
 |--------------------------------------------------------------------------
+| EXTRAI TEXTO DO PDF
+|--------------------------------------------------------------------------
+*/
+
+async function extrairTextoPdf(
+  file: File
+): Promise<string[]> {
+  const buffer =
+    await file.arrayBuffer();
+
+  const loadingTask =
+    pdfjsLib.getDocument({
+      data: buffer,
+    });
+
+  const pdf =
+    await loadingTask.promise;
+
+  const paginas:
+    string[] = [];
+
+  for (
+    let paginaNumero = 1;
+    paginaNumero <=
+    pdf.numPages;
+    paginaNumero++
+  ) {
+    const page =
+      await pdf.getPage(
+        paginaNumero
+      );
+
+    const content =
+      await page.getTextContent();
+
+    const textos: string[] = [];
+
+    for (
+      const item of content.items
+    ) {
+      if (
+        "str" in item &&
+        typeof item.str ===
+          "string"
+      ) {
+        const texto =
+          item.str.trim();
+
+        if (texto) {
+          textos.push(
+            texto
+          );
+        }
+      }
+    }
+
+    const textoPagina =
+      textos.join(" ").trim();
+
+    if (textoPagina) {
+      paginas.push(
+        textoPagina
+      );
+    }
+  }
+
+  return paginas;
+}
+
+/*
+|--------------------------------------------------------------------------
+| EXTRAI PEDIDO DO TEXTO
+|--------------------------------------------------------------------------
+*/
+
+function extrairPedido(
+  texto: string,
+  nomeArquivo: string
+): string {
+  const encontrado =
+    texto.match(
+      /(?:PEDIDO|PED)\s*[:#-]?\s*(\d{4,})/i
+    );
+
+  if (
+    encontrado &&
+    encontrado[1]
+  ) {
+    return encontrado[1];
+  }
+
+  /*
+    Se o PDF não possuir o texto
+    "PEDIDO", tenta extrair do
+    começo do nome do arquivo.
+
+    Exemplo:
+    26808 (NOR) - ...
+  */
+
+  const peloArquivo =
+    nomeArquivo.match(
+      /^(\d{4,})/
+    );
+
+  if (
+    peloArquivo &&
+    peloArquivo[1]
+  ) {
+    return peloArquivo[1];
+  }
+
+  return "";
+}
+
+/*
+|--------------------------------------------------------------------------
+| EXTRAI OF DO TEXTO
+|--------------------------------------------------------------------------
+*/
+
+function extrairOF(
+  texto: string
+): string {
+  const encontrado =
+    texto.match(
+      /\b(?:OF|O\.F\.|ORDEM\s+DE\s+FABRICA[CÇ][AÃ]O)\s*[:#-]?\s*(\d+)\b/i
+    );
+
+  if (
+    encontrado &&
+    encontrado[1]
+  ) {
+    return encontrado[1];
+  }
+
+  return "";
+}
+
+/*
+|--------------------------------------------------------------------------
+| EXTRAI QUANTIDADE DO TEXTO
+|--------------------------------------------------------------------------
+*/
+
+function extrairQuantidade(
+  texto: string
+): number {
+  const encontrado =
+    texto.match(
+      /(?:QTD|QTDE|QUANTIDADE|QUANT)\s*[:#-]?\s*([\d.,]+)/i
+    );
+
+  if (
+    encontrado &&
+    encontrado[1]
+  ) {
+    return converterQuantidade(
+      encontrado[1]
+    );
+  }
+
+  return 0;
+}
+
+/*
+|--------------------------------------------------------------------------
 | LÊ PDF
 |--------------------------------------------------------------------------
 */
@@ -240,160 +482,86 @@ export async function lerPdf(
     );
   }
 
-  const buffer =
-    await file.arrayBuffer();
-
-  const pdf =
-    await pdfjsLib.getDocument({
-      data: buffer,
-    }).promise;
+  const paginas =
+    await extrairTextoPdf(
+      file
+    );
 
   const linhas:
     LinhaProgramacao[] = [];
 
   for (
-    let pagina = 1;
-    pagina <= pdf.numPages;
-    pagina++
+    let indice = 0;
+    indice < paginas.length;
+    indice++
   ) {
-    const page =
-      await pdf.getPage(
-        pagina
-      );
+    const texto =
+      paginas[indice];
 
-    const content =
-      await page.getTextContent();
-
-    const textos =
-      content.items
-        .map(
-          (item: any) =>
-            typeof item.str ===
-            "string"
-              ? item.str
-              : ""
-        )
-        .filter(Boolean);
-
-    const textoPagina =
-      textos.join(" ");
-
-    /*
-    |--------------------------------------------------------------------------
-    | Tenta encontrar número do pedido
-    |--------------------------------------------------------------------------
-    */
-
-    let pedido = "";
-
-    const pedidoMatch =
-      textoPagina.match(
-        /(?:PEDIDO|PED)\s*[:#-]?\s*(\d{4,})/i
-      );
-
-    if (pedidoMatch) {
-      pedido =
-        pedidoMatch[1];
+    if (!texto) {
+      continue;
     }
 
-    /*
-    |--------------------------------------------------------------------------
-    | Tenta identificar OFs
-    |--------------------------------------------------------------------------
-    */
-
-    const ofMatches =
-      textoPagina.match(
-        /\b(?:OF|O\.F\.)\s*[:#-]?\s*\d+\b/gi
-      ) || [];
-
-    /*
-    |--------------------------------------------------------------------------
-    | Tenta identificar quantidades
-    |--------------------------------------------------------------------------
-    */
-
-    const quantidadeMatches =
-      textoPagina.match(
-        /\b(?:QTD|QTDE|QUANTIDADE)\s*[:#-]?\s*\d+(?:[.,]\d+)?\b/gi
-      ) || [];
-
-    /*
-    |--------------------------------------------------------------------------
-    | Caso o PDF tenha texto, cria uma
-    | linha com o conteúdo da página.
-    |
-    | Isso evita perder o PDF mesmo quando
-    | o layout ainda não foi mapeado.
-    |--------------------------------------------------------------------------
-    */
-
-    if (
-      textos.length > 0
-    ) {
-      const descricao =
-        textos
-          .join(" ")
-          .trim();
-
-      let quantidade = 0;
-
-      if (
-        quantidadeMatches.length
-      ) {
-        const ultimo =
-          quantidadeMatches[
-            quantidadeMatches.length -
-              1
-          ];
-
-        const numero =
-          ultimo.match(
-            /(\d+(?:[.,]\d+)?)\s*$/ 
-          );
-
-        if (numero) {
-          quantidade =
-            Number(
-              numero[1].replace(
-                ",",
-                "."
-              )
-            );
-        }
-      }
-
-      let of = "";
-
-      if (
-        ofMatches.length
-      ) {
-        of =
-          ofMatches[0]
-            .replace(
-              /[^0-9]/g,
-              ""
-            );
-      }
-
-      linhas.push(
-        enriquecerLinha({
-          fonte:
-            `${file.name} / PDF página ${pagina}`,
-
-          pedido,
-
-          of,
-
-          descricao,
-
-          quantidade:
-            quantidade > 0
-              ? quantidade
-              : 1,
-        })
+    const pedido =
+      extrairPedido(
+        texto,
+        file.name
       );
-    }
+
+    const of =
+      extrairOF(
+        texto
+      );
+
+    const quantidade =
+      extrairQuantidade(
+        texto
+      );
+
+    /*
+      Mantemos o texto completo da
+      página como descrição provisória.
+
+      Isso permite testar o PDF mesmo
+      quando o layout específico ainda
+      não foi mapeado.
+    */
+
+    const descricao =
+      texto.trim();
+
+    /*
+      Se não encontrou quantidade,
+      usa 1 para não descartar a
+      página inteira.
+
+      Depois podemos ajustar para o
+      layout exato do Pedido.
+    */
+
+    const quantidadeFinal =
+      quantidade > 0
+        ? quantidade
+        : 1;
+
+    const linha =
+      enriquecerLinha({
+        fonte:
+          `${file.name} / PDF página ${indice + 1}`,
+
+        pedido,
+
+        of,
+
+        descricao,
+
+        quantidade:
+          quantidadeFinal,
+      });
+
+    linhas.push(
+      linha
+    );
   }
 
   return linhas;
@@ -417,22 +585,26 @@ export function mesclarPedidoUsinagem(
   for (
     const linha of linhas
   ) {
-    const chave = [
-      linha.pedido,
-      linha.of,
-      linha.descricao,
-    ]
-      .map((valor) =>
-        String(
-          valor ?? ""
+    const chave =
+      [
+        linha.pedido,
+        linha.of,
+        linha.descricao,
+      ]
+        .map(
+          (valor) =>
+            String(
+              valor ?? ""
+            )
+              .trim()
+              .toUpperCase()
         )
-          .trim()
-          .toUpperCase()
-      )
-      .join("|");
+        .join("|");
 
     const existente =
-      mapa.get(chave);
+      mapa.get(
+        chave
+      );
 
     if (!existente) {
       mapa.set(
@@ -442,6 +614,18 @@ export function mesclarPedidoUsinagem(
 
       continue;
     }
+
+    const quantidadeExistente =
+      Number(
+        existente.quantidade ||
+          0
+      );
+
+    const quantidadeNova =
+      Number(
+        linha.quantidade ||
+          0
+      );
 
     mapa.set(
       chave,
@@ -482,14 +666,8 @@ export function mesclarPedidoUsinagem(
 
         quantidade:
           Math.max(
-            Number(
-              existente.quantidade ||
-                0
-            ),
-            Number(
-              linha.quantidade ||
-                0
-            )
+            quantidadeExistente,
+            quantidadeNova
           ),
 
         fonte:
@@ -498,9 +676,9 @@ export function mesclarPedidoUsinagem(
     );
   }
 
-  return [
-    ...mapa.values(),
-  ];
+  return Array.from(
+    mapa.values()
+  );
 }
 
 /*
@@ -519,23 +697,19 @@ export async function lerArquivo(
       ?.toLowerCase();
 
   if (
-    [
-      "xlsx",
-      "xls",
-      "csv",
-    ].includes(
-      extensao || ""
-    )
+    extensao === "pdf"
   ) {
-    return lerPlanilha(
+    return lerPdf(
       file
     );
   }
 
   if (
-    extensao === "pdf"
+    extensao === "xlsx" ||
+    extensao === "xls" ||
+    extensao === "csv"
   ) {
-    return lerPdf(
+    return lerPlanilha(
       file
     );
   }
