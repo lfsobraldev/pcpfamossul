@@ -1,97 +1,352 @@
 import * as XLSX from "xlsx";
+
 import { LinhaProgramacao } from "@/types/programacao";
-import { enriquecerLinha } from "@/lib/programacao";
 
-const normalize = (s:string) => s.normalize("NFD").replace(/[\u0300-\u036f]/g,"").toUpperCase().replace(/[^A-Z0-9]/g,"");
+import {
+  enriquecerLinha,
+} from "@/lib/programacao";
 
-const aliases:any = {
-  pedido:["PEDIDO","NUMEROPEDIDO","NRPEDIDO","NROPEDIDO"],
-  item:["ITEM","NRITEM","NUMEROITEM"],
-  of:["OF","ORDEMFABRICACAO","ORDEMDEFABRICACAO","ORDEM"],
-  descricao:["DESCRICAO","PRODUTO","DESCRICAOPRODUTO","DESCITEM","ITEMDESCRICAO"],
-  tipoPeca:["TIPOPECA","TIPO","PECA"],
-  material:["MATERIAL","MADEIRA"],
-  acabamento:["ACABAMENTO","REVESTIMENTO"],
-  cor:["COR","PADRAO","PADRAOCOR"],
-  medida:["MEDIDA","DIMENSAO","DIMENSOES","BITOLA"],
-  rebaixo:["REBAIXO"],
-  lado:["LADO","MAO"],
-  processo:["PROCESSO","OPERACAO"],
-  maquina:["MAQUINA","RECURSO","CENTROTRABALHO"],
-  quantidade:["QUANTIDADE","QTD","QTDE","QUANT","QTDPROGRAMADA"]
+const normalize = (texto: string) =>
+  texto
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toUpperCase()
+    .replace(/[^A-Z0-9]/g, "");
+
+const aliases = {
+  pedido: [
+    "PEDIDO",
+    "NUMEROPEDIDO",
+    "NRPEDIDO",
+    "NROPEDIDO",
+    "PED",
+  ],
+
+  of: [
+    "OF",
+    "ORDEMFABRICACAO",
+    "ORDEMDEFABRICACAO",
+    "ORDEM",
+    "ORDEMFAB",
+  ],
+
+  descricao: [
+    "DESCRICAO",
+    "DESCRICAODOPRODUTO",
+    "DESCRICAOPRODUTO",
+    "PRODUTO",
+    "DESC",
+    "DESCRICAOITEM",
+  ],
+
+  quantidade: [
+    "QUANTIDADE",
+    "QTD",
+    "QTDE",
+    "QUANT",
+    "QTDPROGRAMADA",
+    "QUANTIDADEPROGRAMADA",
+  ],
 };
 
-function findValue(row:Record<string,unknown>, field:string) {
-  for (const [k,v] of Object.entries(row)) if (aliases[field].includes(normalize(k))) return v;
+function buscarValor(
+  row: Record<
+    string,
+    unknown
+  >,
+  campo: keyof typeof aliases
+) {
+  for (
+    const [coluna, valor]
+    of Object.entries(row)
+  ) {
+    const normalizada =
+      normalize(coluna);
+
+    if (
+      aliases[campo].includes(
+        normalizada
+      )
+    ) {
+      return valor;
+    }
+  }
+
   return "";
 }
 
-function rowToLinha(row:Record<string,unknown>, fonte:string):LinhaProgramacao {
+/*
+|--------------------------------------------------------------------------
+| CONVERTE LINHA DA PLANILHA
+|--------------------------------------------------------------------------
+*/
+
+function converterLinha(
+  row: Record<
+    string,
+    unknown
+  >,
+  fonte: string
+): LinhaProgramacao {
+  const descricao =
+    String(
+      buscarValor(
+        row,
+        "descricao"
+      ) ?? ""
+    ).trim();
+
   return enriquecerLinha({
     fonte,
-    pedido:String(findValue(row,"pedido") ?? ""),
-    item:String(findValue(row,"item") ?? ""),
-    of:String(findValue(row,"of") ?? ""),
-    descricao:String(findValue(row,"descricao") ?? ""),
-    tipoPeca:String(findValue(row,"tipoPeca") ?? ""),
-    material:String(findValue(row,"material") ?? ""),
-    acabamento:String(findValue(row,"acabamento") ?? ""),
-    cor:String(findValue(row,"cor") ?? ""),
-    medida:String(findValue(row,"medida") ?? ""),
-    rebaixo:String(findValue(row,"rebaixo") ?? ""),
-    lado:String(findValue(row,"lado") ?? ""),
-    processo:String(findValue(row,"processo") ?? ""),
-    maquina:String(findValue(row,"maquina") ?? ""),
-    quantidade:Number(findValue(row,"quantidade") || 0),
+
+    pedido:
+      String(
+        buscarValor(
+          row,
+          "pedido"
+        ) ?? ""
+      ).trim(),
+
+    of:
+      String(
+        buscarValor(
+          row,
+          "of"
+        ) ?? ""
+      ).trim(),
+
+    descricao,
+
+    quantidade:
+      Number(
+        buscarValor(
+          row,
+          "quantidade"
+        ) || 0
+      ),
   });
 }
 
-export async function lerPlanilha(file:File):Promise<LinhaProgramacao[]> {
-  const buf = await file.arrayBuffer();
-  const wb = XLSX.read(buf,{type:"array"});
-  const linhas:LinhaProgramacao[] = [];
-  for (const nome of wb.SheetNames) {
-    const ws = wb.Sheets[nome];
-    const rows = XLSX.utils.sheet_to_json<Record<string,unknown>>(ws,{defval:""});
-    for (const row of rows) {
-      const l = rowToLinha(row, `${file.name} / ${nome}`);
-      if ((l.descricao || l.of || l.pedido || l.item) && l.quantidade !== 0) linhas.push(l);
+/*
+|--------------------------------------------------------------------------
+| LÊ EXCEL
+|--------------------------------------------------------------------------
+*/
+
+export async function lerPlanilha(
+  file: File
+): Promise<
+  LinhaProgramacao[]
+> {
+  const buffer =
+    await file.arrayBuffer();
+
+  const workbook =
+    XLSX.read(
+      buffer,
+      {
+        type: "array",
+      }
+    );
+
+  const linhas:
+    LinhaProgramacao[] = [];
+
+  for (
+    const nomeAba
+    of workbook.SheetNames
+  ) {
+    const ws =
+      workbook.Sheets[
+        nomeAba
+      ];
+
+    /*
+      Primeiro tenta tabela
+      tradicional.
+    */
+
+    const rows =
+      XLSX.utils.sheet_to_json<
+        Record<
+          string,
+          unknown
+        >
+      >(
+        ws,
+        {
+          defval: "",
+        }
+      );
+
+    for (
+      const row
+      of rows
+    ) {
+      const linha =
+        converterLinha(
+          row,
+          `${file.name} / ${nomeAba}`
+        );
+
+      if (
+        linha.descricao &&
+        linha.quantidade >
+          0
+      ) {
+        linhas.push(
+          linha
+        );
+      }
     }
   }
+
   return linhas;
 }
 
-export async function lerArquivo(file:File):Promise<LinhaProgramacao[]> {
-  const ext = file.name.split(".").pop()?.toLowerCase();
-  if (["xlsx","xls","csv"].includes(ext || "")) return lerPlanilha(file);
-  throw new Error(`Nesta primeira versão use XLSX, XLS ou CSV. PDF será habilitado na próxima etapa: ${file.name}`);
+/*
+|--------------------------------------------------------------------------
+| MESCLA DUPLICADOS
+|--------------------------------------------------------------------------
+*/
+
+export function mesclarPedidoUsinagem(
+  linhas: LinhaProgramacao[]
+) {
+  const mapa =
+    new Map<
+      string,
+      LinhaProgramacao
+    >();
+
+  for (
+    const linha
+    of linhas
+  ) {
+    /*
+      Pedido + OF + descrição.
+
+      Não utiliza ITEM.
+    */
+
+    const chave = [
+      linha.pedido,
+      linha.of,
+      linha.descricao,
+    ]
+      .map((x) =>
+        String(x)
+          .trim()
+          .toUpperCase()
+      )
+      .join("|");
+
+    const existente =
+      mapa.get(chave);
+
+    if (!existente) {
+      mapa.set(
+        chave,
+        linha
+      );
+
+      continue;
+    }
+
+    /*
+      Se a mesma linha
+      aparecer em mais de uma
+      origem, mantém apenas uma.
+
+      Evita dobrar quantidade
+      entre Pedido e Usinagem.
+    */
+
+    mapa.set(
+      chave,
+      {
+        ...existente,
+
+        pedido:
+          existente.pedido ||
+          linha.pedido,
+
+        of:
+          existente.of ||
+          linha.of,
+
+        descricao:
+          existente
+            .descricao ||
+          linha.descricao,
+
+        material:
+          existente.material ||
+          linha.material,
+
+        medida:
+          existente.medida ||
+          linha.medida,
+
+        rebaixo:
+          existente.rebaixo ||
+          linha.rebaixo,
+
+        acabamento:
+          existente
+            .acabamento ||
+          linha.acabamento,
+
+        cor:
+          existente.cor ||
+          linha.cor,
+
+        quantidade:
+          Math.max(
+            existente
+              .quantidade,
+            linha.quantidade
+          ),
+
+        fonte:
+          `${existente.fonte} + ${linha.fonte}`,
+      }
+    );
+  }
+
+  return [
+    ...mapa.values(),
+  ];
 }
 
-export function mesclarPedidoUsinagem(linhas:LinhaProgramacao[]):LinhaProgramacao[] {
-  const byKey = new Map<string,LinhaProgramacao>();
-  const keyOf = (l:LinhaProgramacao) => l.of ? `OF:${l.of}` : (l.pedido && l.item ? `PI:${l.pedido}:${l.item}` : `DESC:${l.descricao}:${l.medida}:${l.quantidade}`);
-  for (const linha of linhas) {
-    const key = keyOf(linha);
-    const atual = byKey.get(key);
-    if (!atual) { byKey.set(key,linha); continue; }
-    byKey.set(key,{
-      ...atual,
-      pedido:atual.pedido || linha.pedido,
-      item:atual.item || linha.item,
-      of:atual.of || linha.of,
-      descricao:atual.descricao.length >= linha.descricao.length ? atual.descricao : linha.descricao,
-      tipoPeca:atual.tipoPeca || linha.tipoPeca,
-      material:atual.material || linha.material,
-      acabamento:atual.acabamento || linha.acabamento,
-      cor:atual.cor || linha.cor,
-      medida:atual.medida || linha.medida,
-      rebaixo:atual.rebaixo || linha.rebaixo,
-      lado:atual.lado || linha.lado,
-      processo:atual.processo || linha.processo,
-      maquina:atual.maquina || linha.maquina,
-      quantidade:Math.max(atual.quantidade,linha.quantidade),
-      fonte:`${atual.fonte} + ${linha.fonte}`
-    });
+/*
+|--------------------------------------------------------------------------
+| ENTRADA PRINCIPAL
+|--------------------------------------------------------------------------
+*/
+
+export async function lerArquivo(
+  file: File
+) {
+  const ext =
+    file.name
+      .split(".")
+      .pop()
+      ?.toLowerCase();
+
+  if (
+    [
+      "xlsx",
+      "xls",
+      "csv",
+    ].includes(ext || "")
+  ) {
+    return lerPlanilha(
+      file
+    );
   }
-  return [...byKey.values()];
+
+  throw new Error(
+    `Formato ainda não suportado: ${file.name}`
+  );
 }
