@@ -1,90 +1,766 @@
 import ExcelJS from "exceljs";
-import { LinhaProgramacao } from "@/types/programacao";
-import { consolidarQuantidades } from "@/lib/programacao";
 
-const safe = (s:string) => (s||"OUTROS").replace(/[\\/*?:[\]]/g," ").slice(0,31);
+import {
+  LinhaProgramacao,
+} from "@/types/programacao";
 
-function titulo(ws:ExcelJS.Worksheet,texto:string,cols:number){
-  ws.mergeCells(1,1,1,cols);
-  const c=ws.getCell(1,1);
-  c.value=texto;
-  c.font={bold:true,size:16,color:{argb:"FFFFFFFF"}};
-  c.alignment={horizontal:"center",vertical:"middle"};
-  c.fill={type:"pattern",pattern:"solid",fgColor:{argb:"FF17365D"}};
-  ws.getRow(1).height=28;
-}
-function cab(row:ExcelJS.Row){
-  row.font={bold:true,color:{argb:"FFFFFFFF"}};
-  row.fill={type:"pattern",pattern:"solid",fgColor:{argb:"FF244062"}};
-  row.alignment={horizontal:"center",vertical:"middle",wrapText:true};
-}
-function bordas(ws:ExcelJS.Worksheet,ini:number,fim:number,cols:number){
-  for(let r=ini;r<=fim;r++)for(let c=1;c<=cols;c++){
-    ws.getCell(r,c).border={
-      top:{style:"thin",color:{argb:"FFD9E2F3"}},
-      left:{style:"thin",color:{argb:"FFD9E2F3"}},
-      bottom:{style:"thin",color:{argb:"FFD9E2F3"}},
-      right:{style:"thin",color:{argb:"FFD9E2F3"}}
+import {
+  consolidarQuantidades,
+} from "@/lib/programacao";
+
+const safeName = (
+  name: string
+) =>
+  (
+    name ||
+    "OUTROS"
+  )
+    .replace(
+      /[\\/*?:[\]]/g,
+      " "
+    )
+    .slice(
+      0,
+      31
+    );
+
+function titulo(
+  ws: ExcelJS.Worksheet,
+  texto: string,
+  colunas: number
+) {
+  ws.mergeCells(
+    1,
+    1,
+    1,
+    colunas
+  );
+
+  const celula =
+    ws.getCell(
+      1,
+      1
+    );
+
+  celula.value =
+    texto;
+
+  celula.font = {
+    bold: true,
+    size: 16,
+    color: {
+      argb:
+        "FFFFFFFF",
+    },
+  };
+
+  celula.alignment =
+    {
+      horizontal:
+        "center",
+
+      vertical:
+        "middle",
     };
-    ws.getCell(r,c).alignment={vertical:"middle",wrapText:true};
+
+  celula.fill = {
+    type: "pattern",
+    pattern:
+      "solid",
+
+    fgColor: {
+      argb:
+        "FF17365D",
+    },
+  };
+
+  ws.getRow(
+    1
+  ).height = 30;
+}
+
+function cabecalho(
+  row: ExcelJS.Row
+) {
+  row.font = {
+    bold: true,
+
+    color: {
+      argb:
+        "FFFFFFFF",
+    },
+  };
+
+  row.fill = {
+    type: "pattern",
+    pattern:
+      "solid",
+
+    fgColor: {
+      argb:
+        "FF244062",
+    },
+  };
+
+  row.alignment =
+    {
+      horizontal:
+        "center",
+
+      vertical:
+        "middle",
+
+      wrapText: true,
+    };
+
+  row.height = 28;
+}
+
+function aplicarBordas(
+  ws: ExcelJS.Worksheet,
+  inicio: number,
+  fim: number,
+  colunas: number
+) {
+  for (
+    let linha =
+      inicio;
+    linha <= fim;
+    linha++
+  ) {
+    for (
+      let coluna = 1;
+      coluna <=
+      colunas;
+      coluna++
+    ) {
+      const celula =
+        ws.getCell(
+          linha,
+          coluna
+        );
+
+      celula.border =
+        {
+          top: {
+            style:
+              "thin",
+
+            color: {
+              argb:
+                "FFD9E2F3",
+            },
+          },
+
+          left: {
+            style:
+              "thin",
+
+            color: {
+              argb:
+                "FFD9E2F3",
+            },
+          },
+
+          bottom: {
+            style:
+              "thin",
+
+            color: {
+              argb:
+                "FFD9E2F3",
+            },
+          },
+
+          right: {
+            style:
+              "thin",
+
+            color: {
+              argb:
+                "FFD9E2F3",
+            },
+          },
+        };
+
+      celula.alignment =
+        {
+          vertical:
+            "middle",
+
+          wrapText: true,
+        };
+    }
   }
 }
 
-export async function exportarExcel(linhas:LinhaProgramacao[],dataProg:string,turno:string){
-  const wb=new ExcelJS.Workbook();
-  wb.creator="Sobral Programação Industrial";
+export async function exportarExcel(
+  linhas: LinhaProgramacao[],
+  dataProg: string,
+  turno: string
+) {
+  const workbook =
+    new ExcelJS.Workbook();
 
-  const ger=wb.addWorksheet("CONTROLE GERENTE");
-  titulo(ger,`CONTROLE GERENCIAL • ${dataProg || "SEM DATA"} • TURNO ${turno}`,6);
-  ger.addRow([]);
-  ger.addRow(["Indicador","Valor"]); cab(ger.getRow(3));
-  const apontadas=linhas.filter(l=>l.status==="APONTADA").length;
-  ger.addRow(["OFs / linhas programadas",linhas.length]);
-  ger.addRow(["Peças programadas",linhas.reduce((s,l)=>s+Number(l.quantidade||0),0)]);
-  ger.addRow(["Apontadas",apontadas]);
-  ger.addRow(["Pendentes",linhas.filter(l=>l.status==="PENDENTE").length]);
-  ger.addRow(["Aguardando linha",linhas.filter(l=>l.status==="AGUARDANDO LINHA").length]);
-  ger.addRow(["Divergências",linhas.filter(l=>l.status==="DIVERGÊNCIA").length]);
-  ger.addRow(["% apontado",linhas.length ? apontadas/linhas.length : 0]);
-  ger.getCell("B9").numFmt="0.0%";
-  ger.columns=[{width:32},{width:18}];
+  workbook.creator =
+    "Sobral Programação Industrial";
 
-  const apt=wb.addWorksheet("APONTAMENTOS");
-  titulo(apt,`CONTROLE DOS APONTADORES • ${dataProg || "SEM DATA"} • TURNO ${turno}`,9);
-  apt.addRow([]);
-  apt.addRow(["OF","Pedido","Item","Máquina","Descrição","Medida","Qtd","Status","Observação"]); cab(apt.getRow(3));
-  for(const l of linhas) apt.addRow([l.of,l.pedido,l.item,l.maquina,l.descricao,l.medida,l.quantidade,l.status,l.observacao]);
-  apt.columns=[{width:15},{width:14},{width:10},{width:20},{width:48},{width:20},{width:10},{width:20},{width:30}];
-  bordas(apt,3,apt.rowCount,9);
+  /*
+  |--------------------------------------------------------------------------
+  | CONTROLE GERENTE
+  |--------------------------------------------------------------------------
+  */
 
-  const qtd=wb.addWorksheet("QUANTIDADES LIDERES");
-  titulo(qtd,`RESUMO DE QUANTIDADES PARA LÍDERES • ${dataProg || "SEM DATA"} • TURNO ${turno}`,8);
-  qtd.addRow([]);
-  qtd.addRow(["Máquina","Peça","Material","Acabamento","Cor","Medida","Rebaixo","Qtd Total"]); cab(qtd.getRow(3));
-  for(const r of consolidarQuantidades(linhas)) qtd.addRow([r.maquina,r.tipoPeca,r.material,r.acabamento,r.cor,r.medida,r.rebaixo,r.quantidade]);
-  qtd.columns=[{width:20},{width:24},{width:20},{width:20},{width:24},{width:20},{width:14},{width:12}];
-  bordas(qtd,3,qtd.rowCount,8);
+  const gerente =
+    workbook.addWorksheet(
+      "CONTROLE GERENTE"
+    );
 
-  const maquinas=[...new Set(linhas.map(l=>l.maquina || "OUTROS"))].sort();
-  for(const maquina of maquinas){
-    const ws=wb.addWorksheet(safe(maquina));
-    titulo(ws,`${maquina} • PROGRAMAÇÃO DO LÍDER • ${dataProg || "SEM DATA"} • TURNO ${turno}`,7);
-    ws.addRow([]);
-    ws.addRow(["OF","Pedido","Item","Descrição","Medida / Rebaixo","Lado","Qtd"]); cab(ws.getRow(3));
-    for(const l of linhas.filter(x=>x.maquina===maquina))
-      ws.addRow([l.of,l.pedido,l.item,l.descricao,[l.medida,l.rebaixo].filter(Boolean).join(" • "),l.lado,l.quantidade]);
-    ws.columns=[{width:15},{width:14},{width:10},{width:55},{width:26},{width:14},{width:12}];
-    ws.pageSetup={orientation:"landscape",fitToPage:true,fitToWidth:1,fitToHeight:0,paperSize:9};
-    bordas(ws,3,ws.rowCount,7);
-    for(let r=4;r<=ws.rowCount;r++) ws.getRow(r).height=34;
+  titulo(
+    gerente,
+    `CONTROLE GERENCIAL • ${dataProg} • TURNO ${turno}`,
+    4
+  );
+
+  gerente.addRow(
+    []
+  );
+
+  gerente.addRow([
+    "Indicador",
+    "Valor",
+  ]);
+
+  cabecalho(
+    gerente.getRow(
+      3
+    )
+  );
+
+  const totalPecas =
+    linhas.reduce(
+      (
+        total,
+        linha
+      ) =>
+        total +
+        Number(
+          linha.quantidade ||
+            0
+        ),
+      0
+    );
+
+  const apontadas =
+    linhas.filter(
+      (linha) =>
+        linha.status ===
+        "APONTADA"
+    ).length;
+
+  gerente.addRow([
+    "Linhas / OFs",
+    linhas.length,
+  ]);
+
+  gerente.addRow([
+    "Peças programadas",
+    totalPecas,
+  ]);
+
+  gerente.addRow([
+    "Programadas",
+    linhas.filter(
+      (linha) =>
+        linha.status ===
+        "PROGRAMADO"
+    ).length,
+  ]);
+
+  gerente.addRow([
+    "Apontadas",
+    apontadas,
+  ]);
+
+  gerente.addRow([
+    "Pendentes",
+    linhas.filter(
+      (linha) =>
+        linha.status ===
+        "PENDENTE"
+    ).length,
+  ]);
+
+  gerente.addRow([
+    "Aguardando linha",
+    linhas.filter(
+      (linha) =>
+        linha.status ===
+        "AGUARDANDO LINHA"
+    ).length,
+  ]);
+
+  gerente.addRow([
+    "Divergências",
+    linhas.filter(
+      (linha) =>
+        linha.status ===
+        "DIVERGÊNCIA"
+    ).length,
+  ]);
+
+  gerente.addRow([
+    "% apontado",
+    linhas.length
+      ? apontadas /
+        linhas.length
+      : 0,
+  ]);
+
+  gerente.getCell(
+    "B10"
+  ).numFmt =
+    "0.0%";
+
+  gerente.columns =
+    [
+      {
+        width: 35,
+      },
+
+      {
+        width: 20,
+      },
+    ];
+
+  /*
+  |--------------------------------------------------------------------------
+  | APONTAMENTOS
+  |--------------------------------------------------------------------------
+  */
+
+  const apontamento =
+    workbook.addWorksheet(
+      "APONTAMENTOS"
+    );
+
+  titulo(
+    apontamento,
+    `CONTROLE DOS APONTADORES • ${dataProg} • TURNO ${turno}`,
+    8
+  );
+
+  apontamento.addRow(
+    []
+  );
+
+  apontamento.addRow(
+    [
+      "Pedido",
+      "OF",
+      "Peça",
+      "Descrição",
+      "Quantidade",
+      "Prioridade",
+      "Status",
+      "Observação",
+    ]
+  );
+
+  cabecalho(
+    apontamento.getRow(
+      3
+    )
+  );
+
+  for (
+    const linha
+    of linhas
+  ) {
+    apontamento.addRow(
+      [
+        linha.pedido,
+
+        linha.of,
+
+        linha.peca,
+
+        linha.descricao,
+
+        linha.quantidade,
+
+        linha.prioridade,
+
+        linha.status,
+
+        linha.observacao,
+      ]
+    );
   }
 
-  const buf=await wb.xlsx.writeBuffer();
-  const blob=new Blob([buf],{type:"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"});
-  const url=URL.createObjectURL(blob);
-  const a=document.createElement("a");
-  a.href=url;
-  a.download=`Programacao_Producao_${dataProg || "sem-data"}.xlsx`;
-  a.click();
-  URL.revokeObjectURL(url);
+  apontamento.columns =
+    [
+      {
+        width: 14,
+      },
+
+      {
+        width: 15,
+      },
+
+      {
+        width: 24,
+      },
+
+      {
+        width: 55,
+      },
+
+      {
+        width: 12,
+      },
+
+      {
+        width: 15,
+      },
+
+      {
+        width: 22,
+      },
+
+      {
+        width: 30,
+      },
+    ];
+
+  aplicarBordas(
+    apontamento,
+    3,
+    apontamento.rowCount,
+    8
+  );
+
+  /*
+  |--------------------------------------------------------------------------
+  | QUANTIDADES LÍDERES
+  |--------------------------------------------------------------------------
+  */
+
+  const resumo =
+    workbook.addWorksheet(
+      "QUANTIDADES LIDERES"
+    );
+
+  titulo(
+    resumo,
+    `QUANTIDADES PARA LÍDERES • ${dataProg} • TURNO ${turno}`,
+    8
+  );
+
+  resumo.addRow([]);
+
+  resumo.addRow([
+    "Grupo",
+    "Peça",
+    "Material",
+    "Medida",
+    "Rebaixo",
+    "Acabamento",
+    "Cor",
+    "Qtd Total",
+  ]);
+
+  cabecalho(
+    resumo.getRow(
+      3
+    )
+  );
+
+  for (
+    const item
+    of consolidarQuantidades(
+      linhas
+    )
+  ) {
+    resumo.addRow(
+      [
+        item.maquina,
+
+        item.peca,
+
+        item.material,
+
+        item.medida,
+
+        item.rebaixo,
+
+        item.acabamento,
+
+        item.cor,
+
+        item.quantidade,
+      ]
+    );
+  }
+
+  resumo.columns =
+    [
+      {
+        width: 20,
+      },
+
+      {
+        width: 24,
+      },
+
+      {
+        width: 24,
+      },
+
+      {
+        width: 20,
+      },
+
+      {
+        width: 15,
+      },
+
+      {
+        width: 20,
+      },
+
+      {
+        width: 24,
+      },
+
+      {
+        width: 14,
+      },
+    ];
+
+  aplicarBordas(
+    resumo,
+    3,
+    resumo.rowCount,
+    8
+  );
+
+  /*
+  |--------------------------------------------------------------------------
+  | ABAS DOS LÍDERES
+  |--------------------------------------------------------------------------
+  */
+
+  const grupos = [
+    ...new Set(
+      linhas.map(
+        (linha) =>
+          linha.maquina ||
+          "OUTROS"
+      )
+    ),
+  ].sort();
+
+  for (
+    const grupo
+    of grupos
+  ) {
+    const ws =
+      workbook.addWorksheet(
+        safeName(
+          grupo
+        )
+      );
+
+    titulo(
+      ws,
+      `${grupo} • PROGRAMAÇÃO DO DIA • ${dataProg} • TURNO ${turno}`,
+      10
+    );
+
+    ws.addRow([]);
+
+    ws.addRow([
+      "Pedido",
+      "OF",
+      "Peça",
+      "Descrição",
+      "Material",
+      "Medida",
+      "Rebaixo",
+      "Acabamento",
+      "Cor",
+      "Quantidade",
+    ]);
+
+    cabecalho(
+      ws.getRow(
+        3
+      )
+    );
+
+    const linhasGrupo =
+      linhas.filter(
+        (linha) =>
+          linha.maquina ===
+          grupo
+      );
+
+    for (
+      const linha
+      of linhasGrupo
+    ) {
+      ws.addRow(
+        [
+          linha.pedido,
+
+          linha.of,
+
+          linha.peca,
+
+          linha.descricao,
+
+          linha.material,
+
+          linha.medida,
+
+          linha.rebaixo,
+
+          linha.acabamento,
+
+          linha.cor,
+
+          linha.quantidade,
+        ]
+      );
+    }
+
+    ws.columns = [
+      {
+        width: 14,
+      },
+
+      {
+        width: 15,
+      },
+
+      {
+        width: 22,
+      },
+
+      {
+        width: 50,
+      },
+
+      {
+        width: 22,
+      },
+
+      {
+        width: 20,
+      },
+
+      {
+        width: 15,
+      },
+
+      {
+        width: 20,
+      },
+
+      {
+        width: 24,
+      },
+
+      {
+        width: 13,
+      },
+    ];
+
+    ws.pageSetup =
+      {
+        orientation:
+          "landscape",
+
+        fitToPage:
+          true,
+
+        fitToWidth:
+          1,
+
+        fitToHeight:
+          0,
+
+        paperSize:
+          9,
+      };
+
+    ws.pageMargins =
+      {
+        left: 0.2,
+        right: 0.2,
+        top: 0.4,
+        bottom: 0.4,
+        header: 0.2,
+        footer: 0.2,
+      };
+
+    aplicarBordas(
+      ws,
+      3,
+      ws.rowCount,
+      10
+    );
+
+    for (
+      let i = 4;
+      i <=
+      ws.rowCount;
+      i++
+    ) {
+      ws.getRow(
+        i
+      ).height = 35;
+    }
+  }
+
+  /*
+  |--------------------------------------------------------------------------
+  | DOWNLOAD
+  |--------------------------------------------------------------------------
+  */
+
+  const buffer =
+    await workbook.xlsx.writeBuffer();
+
+  const blob =
+    new Blob(
+      [buffer],
+      {
+        type:
+          "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      }
+    );
+
+  const url =
+    URL.createObjectURL(
+      blob
+    );
+
+  const link =
+    document.createElement(
+      "a"
+    );
+
+  link.href =
+    url;
+
+  link.download =
+    `Programacao_Producao_${dataProg}.xlsx`;
+
+  link.click();
+
+  URL.revokeObjectURL(
+    url
+  );
 }
