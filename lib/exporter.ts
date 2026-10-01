@@ -762,11 +762,3 @@ export async function exportarExcel(
     url
   );
 }
-
-
-Agora substitua somente o exporter.ts por esse e rode novamente:
-
-npm run build
-
-
-Se aparecer outro erro, mande o erro inteiro. Aí seguimos um por um, sem mexer desnecessariamente nos arquivos que já estão corretos.
